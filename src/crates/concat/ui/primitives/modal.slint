@@ -741,25 +741,41 @@ export component Field inherits Rectangle {
         clicked => { input.focus(); }
     }
 
-    input := TextInput {
+    // Clip inside the padding so scrolled text cannot cover the focus ring.
+    Rectangle {
         x: 10px;
-        y: (parent.height - self.height) / 2;
-        width: parent.width - 20px;
-        // Without this the input takes the whole field's height — a child of a
-        // Rectangle fills it by default — so the centring above resolves to
-        // zero and the text draws hard against the top edge. Same fix, and the
-        // same reason, as SearchField in the inspector.
-        height: self.preferred-height;
-        text <=> root.draft;
-        input-type: root.secret ? InputType.password : InputType.text;
-        color: Theme.fg;
-        font-family: root.technical ? Theme.font-technical : Theme.font;
-        font-size: Theme.fs;
-        single-line: true;
-        selection-background-color: Theme.accent;
-        selection-foreground-color: Theme.on-accent;
+        width: max(1px, root.width - 20px);
+        height: root.height;
+        clip: true;
+        input := TextInput {
+            // Keep the caret visible, including navigation without editing (#506).
+            property <length> scroll-x;
+            x: min(0px, max(parent.width - self.width - self.text-cursor-width, self.scroll-x));
+            y: (parent.height - self.height) / 2;
+            width: max(parent.width - self.text-cursor-width, self.preferred-width);
+            // Without this the input takes the whole field's height — a child of a
+            // Rectangle fills it by default — so the centring above resolves to
+            // zero and the text draws hard against the top edge. Same fix, and the
+            // same reason, as SearchField in the inspector.
+            height: self.preferred-height;
+            text <=> root.draft;
+            input-type: root.secret ? InputType.password : InputType.text;
+            color: Theme.fg;
+            font-family: root.technical ? Theme.font-technical : Theme.font;
+            font-size: Theme.fs;
+            single-line: true;
+            selection-background-color: Theme.accent;
+            selection-foreground-color: Theme.on-accent;
 
-        edited => { root.edited(self.text); }
+            cursor-position-changed(position) => {
+                if position.x + self.x < 0px {
+                    self.scroll-x = -position.x;
+                } else if position.x + self.x > parent.width - self.text-cursor-width {
+                    self.scroll-x = parent.width - self.text-cursor-width - position.x;
+                }
+            }
+            edited => { root.edited(self.text); }
+        }
     }
 
     if root.draft == "" && !input.has-focus: Text {
